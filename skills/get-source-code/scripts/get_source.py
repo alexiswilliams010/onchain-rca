@@ -106,8 +106,12 @@ def parse_source(response):
                 raise ValueError(f"Failed to parse source code: {source_code} ")
 
         # Check if SourceCode is a dict with 'sources' key (multi-file) or a plain string (single-file)
-        if isinstance(result['SourceCode'], dict) and 'sources' in result['SourceCode']:
-            return combine_sources(result['SourceCode'])
+        if isinstance(result['SourceCode'], dict):
+            if 'sources' in result['SourceCode']:
+                return combine_sources(result['SourceCode'])
+            else:
+                # Dict without 'sources' key - files are at top level (e.g. {"File.sol": {"content": "..."}})
+                return combine_sources({'sources': result['SourceCode']})
         else:
             # Single-file contract - return the source code as-is
             return result['SourceCode']
