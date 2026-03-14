@@ -32,11 +32,11 @@ The output of the full pipeline is a markdown RCA report covering:
 
 Orchestrates the full RCA workflow. Given a transaction hash, contract address(es), and chain, it coordinates the other skills to retrieve traces and source code, analyzes the exploit, and writes a structured markdown report. The report is generated via a script that reads trace and source code files directly, ensuring those sections are never truncated, annotated, or manually copied.
 
-### `get-tx-traces`
+### `manage-tx-traces`
 
-**Retrieve transaction traces for a given tx hash.**
+**Fetch, cache, and display transaction traces for a given tx hash.**
 
-Uses `cast run` (Foundry) under the hood to replay a transaction against historical chain state and extract its full call trace. Supports multiple chains via RPC environment variables, address labeling, and a verbosity flag to control trace depth.
+Uses `cast run` (Foundry) under the hood to replay a transaction against historical chain state and extract its full call trace. Traces are cached locally for reuse. The `show` subcommand provides hex decoding of raw ABI data and filtering by depth, function call, address, contract name, or selector. The `discover` subcommand lists all contracts and functions found in a trace.
 
 ### `get-source-code`
 
