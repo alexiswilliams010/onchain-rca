@@ -1,0 +1,45 @@
+Executing previous transactions from the block.
+Traces:
+  [173270] 0x6f95d4d251053483f41c8718C30F4F3C404A8cf2::borrow(60384500431 [6.038e10])
+    ├─ [168056] 0x67Db14E73C2Dce786B5bbBfa4D010dEab4BBFCF9::borrow(60384500431 [6.038e10]) [delegatecall]
+    │   ├─ [12708] Unitroller::fallback()
+    │   │   ├─ [7565] 0xd13457c3532D00B1e581596C191C2B5e215E3b9b::_beforeNonReentrant() [delegatecall]
+    │   │   │   └─ ← [Stop]
+    │   │   └─ ← [Return]
+    │   ├─ [9839] 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48::balanceOf(0x6f95d4d251053483f41c8718C30F4F3C404A8cf2) [staticcall]
+    │   │   ├─ [2553] FiatTokenV2_2::balanceOf(0x6f95d4d251053483f41c8718C30F4F3C404A8cf2) [delegatecall]
+    │   │   │   └─ ← [Return] 60384500431 [6.038e10]
+    │   │   └─ ← [Return] 60384500431 [6.038e10]
+    │   ├─ [10659] 0xc8acAD405fF67eaEE2aCA374764883cECbD490AD::getBorrowRate(60384500431 [6.038e10], 3406230259371 [3.406e12], 206027096243 [2.06e11]) [staticcall]
+    │   │   └─ ← [Return] 0x00000000000000000000000000000000000000000000000000000002e6ca3d59
+    │   ├─ emit AccrueInterest(: 60384500431 [6.038e10], : 3087559467 [3.087e9], : 1320958436818788854 [1.32e18], : 3409317818838 [3.409e12])
+    │   ├─ [225] 0xc8acAD405fF67eaEE2aCA374764883cECbD490AD::checkpointInterest(12461948249 [1.246e10])
+    │   │   └─ ← [Revert] EvmError: Revert
+    │   ├─ [1224] Unitroller::fallback(0x6f95d4d251053483f41c8718C30F4F3C404A8cf2, 0x912f8C412fF54a8773eE54a826142876077e9501, 60384500431 [6.038e10])
+    │   │   ├─ [490] 0xd13457c3532D00B1e581596C191C2B5e215E3b9b::borrowAllowed(0x6f95d4d251053483f41c8718C30F4F3C404A8cf2, 0x912f8C412fF54a8773eE54a826142876077e9501, 60384500431 [6.038e10]) [delegatecall]
+    │   │   │   └─ ← [Return] 0x0000000000000000000000000000000000000000000000000000000000000000
+    │   │   └─ ← [Return] 0x0000000000000000000000000000000000000000000000000000000000000000
+    │   ├─ [1339] 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48::balanceOf(0x6f95d4d251053483f41c8718C30F4F3C404A8cf2) [staticcall]
+    │   │   ├─ [553] FiatTokenV2_2::balanceOf(0x6f95d4d251053483f41c8718C30F4F3C404A8cf2) [delegatecall]
+    │   │   │   └─ ← [Return] 60384500431 [6.038e10]
+    │   │   └─ ← [Return] 60384500431 [6.038e10]
+    │   ├─ [1217] Unitroller::fallback(0x6f95d4d251053483f41c8718C30F4F3C404A8cf2, 60384500431 [6.038e10])
+    │   │   ├─ [499] 0xd13457c3532D00B1e581596C191C2B5e215E3b9b::borrowWithinLimits(0x6f95d4d251053483f41c8718C30F4F3C404A8cf2, 60384500431 [6.038e10]) [delegatecall]
+    │   │   │   └─ ← [Return] 0x0000000000000000000000000000000000000000000000000000000000000000
+    │   │   └─ ← [Return] 0x0000000000000000000000000000000000000000000000000000000000000000
+    │   ├─ [15052] 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48::transfer(0x912f8C412fF54a8773eE54a826142876077e9501, 60384500431 [6.038e10])
+    │   │   ├─ [14263] FiatTokenV2_2::transfer(0x912f8C412fF54a8773eE54a826142876077e9501, 60384500431 [6.038e10]) [delegatecall]
+    │   │   │   ├─ emit Transfer(from: 0x6f95d4d251053483f41c8718C30F4F3C404A8cf2, to: 0x912f8C412fF54a8773eE54a826142876077e9501, value: 60384500431 [6.038e10])
+    │   │   │   └─ ← [Return] true
+    │   │   └─ ← [Return] true
+    │   ├─ emit Borrow(: 0x912f8C412fF54a8773eE54a826142876077e9501, : 60384500431 [6.038e10], : 60384500431 [6.038e10], : 3469702319269 [3.469e12])
+    │   ├─ [1325] Unitroller::fallback()
+    │   │   ├─ [692] 0xd13457c3532D00B1e581596C191C2B5e215E3b9b::_afterNonReentrant() [delegatecall]
+    │   │   │   └─ ← [Stop]
+    │   │   └─ ← [Return]
+    │   └─ ← [Return] 0x0000000000000000000000000000000000000000000000000000000000000000
+    └─ ← [Return] 0x0000000000000000000000000000000000000000000000000000000000000000
+
+
+Transaction successfully executed.
+Gas used: 184122
