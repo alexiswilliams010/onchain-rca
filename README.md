@@ -24,6 +24,42 @@ The output of the full pipeline is a markdown RCA report covering:
 | [`cast`](https://book.getfoundry.sh/getting-started/installation) | Replays transactions to generate traces |
 | `ETHERSCAN_API_KEY` | Authenticates source code lookups via Etherscan |
 
+## Automated RCA Script
+
+`run_rca.py` automates the entire RCA pipeline as a single CLI invocation. It gathers traces and source code via subprocess, then launches a Claude agent to analyze the exploit and write the report — no interactive session required.
+
+### Additional Prerequisites
+
+| Tool / Variable | Purpose |
+|---|---|
+| `ANTHROPIC_API_KEY` | Authenticates with the Claude API for agent analysis |
+| [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) | Required by `claude-agent-sdk` |
+
+### Usage
+
+```bash
+cd /path/to/onchain-rca
+uv run run_rca.py --tx-hash <HASH> --contracts <ADDR1,ADDR2,...> --chain <CHAIN> \
+    [--output FILE] [--model MODEL]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `--tx-hash` | Yes | Transaction hash of the hack |
+| `--contracts` | Yes | Comma-separated contract addresses for source code retrieval |
+| `--chain` | Yes | Chain identifier (`eth`, `base`, `op`, `arb`) |
+| `--output` | No | Output file path (default: `rca-<tx_hash_first_10>.md`) |
+| `--model` | No | Claude model to use (default: `claude-opus-4-6`) |
+
+### Example
+
+```bash
+uv run run_rca.py \
+    --tx-hash 0x889e80e5596af34a544d4b517bf559434e3b7e57a79e2981e4b03e7abb94ae82 \
+    --contracts 0x6f95d4d251053483f41c8718C30F4F3C404A8cf2 \
+    --chain eth
+```
+
 ## Skills
 
 ### `make-hack-rca`
