@@ -6,13 +6,81 @@
 """Automated Web3 hack root cause analysis using Claude Agent SDK."""
 
 import argparse
+import logging
 import os
 import subprocess
 import sys
 from pathlib import Path
 
 import anyio
-from claude_agent_sdk import query, ClaudeAgentOptions, AgentDefinition, ResultMessage
+from claude_agent_sdk import (
+    query,
+    ClaudeAgentOptions,
+    AgentDefinition,
+    AssistantMessage,
+    ResultMessage,
+    SystemMessage,
+)
+
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+class _ColorFormatter(logging.Formatter):
+    """Colored log formatter with category-aware styling."""
+
+    RESET = "\033[0m"
+    COLORS = {
+        "DEBUG":    "\033[90m",        # gray
+        "INFO":     "\033[36m",        # cyan
+        "WARNING":  "\033[33m",        # yellow
+        "ERROR":    "\033[31m",        # red
+        "CRITICAL": "\033[1;31m",      # bold red
+    }
+    # Extra colors for structured categories
+    CATEGORY = {
+        "phase":    "\033[1;34m",      # bold blue
+        "step":     "\033[34m",        # blue
+        "cmd":      "\033[90m",        # gray
+        "tool":     "\033[35m",        # magenta
+        "agent":    "\033[1;35m",      # bold magenta
+        "session":  "\033[36m",        # cyan
+        "result":   "\033[1;32m",      # bold green
+        "cost":     "\033[33m",        # yellow
+    }
+
+    def __init__(self, use_color: bool = True):
+        super().__init__()
+        self._use_color = use_color
+
+    def format(self, record: logging.LogRecord) -> str:
+        cat = getattr(record, "cat", None)
+        msg = record.getMessage()
+
+        if not self._use_color:
+            if cat:
+                return f"  [{cat}] {msg}"
+            return msg
+
+        if cat and cat in self.CATEGORY:
+            color = self.CATEGORY[cat]
+            label = f"{color}[{cat}]{self.RESET}"
+            return f"  {label} {msg}"
+
+        color = self.COLORS.get(record.levelname, "")
+        return f"{color}{msg}{self.RESET}"
+
+
+log = logging.getLogger("rca")
+
+
+def _setup_logging(verbose: bool) -> None:
+    """Configure the rca logger with colored output."""
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(_ColorFormatter(use_color=sys.stderr.isatty()))
+    log.addHandler(handler)
+    log.setLevel(logging.DEBUG if verbose else logging.INFO)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -138,7 +206,7 @@ def validate_env(chain: str) -> str:
     """Validate required environment variables. Returns the RPC env var name."""
     rpc_var = CHAIN_TO_RPC.get(chain)
     if rpc_var is None:
-        print(f"Error: unsupported chain '{chain}'. Supported: {', '.join(CHAIN_TO_RPC)}", file=sys.stderr)
+        log.error("Unsupported chain '%s'. Supported: %s", chain, ", ".join(CHAIN_TO_RPC))
         sys.exit(1)
 
     missing = []
@@ -150,7 +218,7 @@ def validate_env(chain: str) -> str:
         missing.append("ANTHROPIC_API_KEY")
 
     if missing:
-        print(f"Error: missing environment variable(s): {', '.join(missing)}", file=sys.stderr)
+        log.error("Missing environment variable(s): %s", ", ".join(missing))
         sys.exit(1)
 
     return rpc_var
@@ -162,7 +230,9 @@ def validate_env(chain: str) -> str:
 
 def run_cmd(cmd: list[str], cwd: Path, capture: bool = False, stdout_file: str | None = None) -> str:
     """Run a subprocess command, optionally capturing or redirecting output."""
-    print(f"  → {' '.join(str(c) for c in cmd[:5])}{'...' if len(cmd) > 5 else ''}")
+    preview = " ".join(str(c) for c in cmd[:5]) + ("..." if len(cmd) > 5 else "")
+    log.debug(preview, extra={"cat": "cmd"})
+
     if stdout_file:
         with open(stdout_file, "w") as f:
             result = subprocess.run(cmd, cwd=cwd, stdout=f, stderr=subprocess.PIPE, text=True)
@@ -172,9 +242,9 @@ def run_cmd(cmd: list[str], cwd: Path, capture: bool = False, stdout_file: str |
         result = subprocess.run(cmd, cwd=cwd, stderr=subprocess.PIPE, text=True)
 
     if result.returncode != 0:
-        print(f"Error running command: {' '.join(str(c) for c in cmd)}", file=sys.stderr)
+        log.error("Command failed: %s", " ".join(str(c) for c in cmd))
         if result.stderr:
-            print(result.stderr, file=sys.stderr)
+            log.error(result.stderr.strip())
         sys.exit(1)
 
     return result.stdout if capture else ""
@@ -185,31 +255,27 @@ def gather_data(tx_hash: str, contracts: list[str], chain: str, rpc_var: str) ->
     traces_file = f"/tmp/rca_traces_{tx_hash[:10]}.txt"
     source_file = f"/tmp/rca_source_{tx_hash[:10]}.txt"
 
-    # Step 1: Fetch and cache traces
-    print("\n[1/4] Fetching and caching traces...")
+    log.info("Fetching and caching traces", extra={"cat": "step"})
     run_cmd(
         ["uv", "run", str(TRACES_SCRIPT), "get", "--tx-hash", tx_hash, "--rpc-var", rpc_var],
         cwd=TRACES_CWD,
     )
 
-    # Step 2: Save full traces to file
-    print("[2/4] Saving traces to file...")
+    log.info("Saving traces to file", extra={"cat": "step"})
     run_cmd(
         ["uv", "run", str(TRACES_SCRIPT), "show", "--tx-hash", tx_hash],
         cwd=TRACES_CWD,
         stdout_file=traces_file,
     )
 
-    # Step 3: Discover contracts/functions
-    print("[3/4] Discovering contracts and functions...")
+    log.info("Discovering contracts and functions", extra={"cat": "step"})
     discover_output = run_cmd(
         ["uv", "run", str(TRACES_SCRIPT), "discover", "--tx-hash", tx_hash],
         cwd=TRACES_CWD,
         capture=True,
     )
 
-    # Step 4: Save source code to file
-    print("[4/4] Retrieving source code...")
+    log.info("Retrieving source code", extra={"cat": "step"})
     run_cmd(
         ["uv", "run", str(SOURCE_SCRIPT), ",".join(contracts), chain, "--traces", traces_file],
         cwd=SOURCE_CWD,
@@ -222,6 +288,34 @@ def gather_data(tx_hash: str, contracts: list[str], chain: str, rpc_var: str) ->
 # ---------------------------------------------------------------------------
 # Agent Analysis
 # ---------------------------------------------------------------------------
+
+_TOOL_FORMATTERS: dict[str, callable] = {
+    "Bash":  lambda inp: inp.get("command", "")[:120],
+    "Read":  lambda inp: inp.get("file_path", "?"),
+    "Write": lambda inp: inp.get("file_path", "?"),
+    "Edit":  lambda inp: inp.get("file_path", "?"),
+    "Glob":  lambda inp: inp.get("pattern", "?"),
+    "Grep":  lambda inp: inp.get("pattern", "?"),
+    "Task":  lambda inp: (inp.get("description") or inp.get("prompt", "?"))[:100],
+}
+
+
+def _log_assistant(message: AssistantMessage) -> None:
+    """Log assistant message: stream text to stdout, tool calls to debug log."""
+    for block in message.content:
+        if hasattr(block, "text") and block.text:
+            sys.stdout.write(block.text)
+            sys.stdout.flush()
+        elif hasattr(block, "type") and block.type == "tool_use":
+            name = getattr(block, "name", "?")
+            tool_input = getattr(block, "input", {})
+            fmt = _TOOL_FORMATTERS.get(name, lambda _: "")
+            detail = fmt(tool_input)
+            if detail:
+                log.debug("%s %s", name, detail, extra={"cat": "tool"})
+            else:
+                log.debug("%s", name, extra={"cat": "tool"})
+
 
 async def run_analysis(
     tx_hash: str,
@@ -261,7 +355,9 @@ Read the trace and source code files, analyze the hack, then write the report \
 to the output path using a Python script that reads files directly (never copy/paste \
 trace or source content)."""
 
-    print(f"\nLaunching Claude agent (model: {model})...\n")
+    log.info("Launching agent (model: %s)", model, extra={"cat": "agent"})
+
+    turn_count = 0
 
     async for message in query(
         prompt=user_prompt,
@@ -282,8 +378,37 @@ trace or source content)."""
             },
         ),
     ):
-        if isinstance(message, ResultMessage):
-            print(message.result)
+        if isinstance(message, SystemMessage):
+            subtype = getattr(message, "subtype", "")
+            if subtype == "init":
+                session_id = getattr(message, "session_id", None) or (
+                    message.data.get("session_id") if hasattr(message, "data") else None
+                )
+                log.debug("Session %s", session_id, extra={"cat": "session"})
+            elif subtype == "compact_boundary":
+                log.debug("Context window compacted", extra={"cat": "session"})
+
+        elif isinstance(message, AssistantMessage):
+            turn_count += 1
+            log.debug("Turn %d", turn_count, extra={"cat": "agent"})
+            _log_assistant(message)
+
+        elif isinstance(message, ResultMessage):
+            # Ensure a newline after any streamed text
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+            if message.subtype == "success":
+                cost = message.total_cost_usd
+                turns = message.num_turns
+                cost_str = f"${cost:.4f}" if cost is not None else "N/A"
+                log.info("Completed in %s turns, cost: %s", turns, cost_str, extra={"cat": "result"})
+            else:
+                log.error("Agent stopped: %s", message.subtype)
+                if message.subtype == "error_max_turns":
+                    log.warning("Hint: increase --max-turns or simplify the task")
+                if message.total_cost_usd is not None:
+                    log.info("Cost: $%s", f"{message.total_cost_usd:.4f}", extra={"cat": "cost"})
 
 
 # ---------------------------------------------------------------------------
@@ -304,6 +429,7 @@ Example:
     parser.add_argument("--chain", required=True, choices=CHAIN_TO_RPC.keys(), help="Chain identifier")
     parser.add_argument("--output", default=None, help="Output file path (default: rca-<tx_hash_first_10>.md)")
     parser.add_argument("--model", default="claude-opus-4-6", help="Claude model to use (default: claude-opus-4-6)")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Show agent tool calls and session details")
     args = parser.parse_args()
 
     tx_hash = args.tx_hash
@@ -312,24 +438,27 @@ Example:
     output_file = args.output or f"rca-{tx_hash[:10]}.md"
     model = args.model
 
+    _setup_logging(args.verbose)
+
     # Validate
-    print("Validating environment...")
+    log.info("Validating environment", extra={"cat": "phase"})
     rpc_var = validate_env(chain)
 
     # Gather data
-    print("Gathering data...")
+    log.info("Gathering data", extra={"cat": "phase"})
     traces_file, source_file, discover_output = gather_data(tx_hash, contracts, chain, rpc_var)
-    print(f"\nTraces saved to: {traces_file}")
-    print(f"Source saved to: {source_file}")
+    log.debug("Traces: %s", traces_file, extra={"cat": "step"})
+    log.debug("Source: %s", source_file, extra={"cat": "step"})
 
     # Run analysis
+    log.info("Analyzing exploit", extra={"cat": "phase"})
     anyio.run(run_analysis, tx_hash, chain, traces_file, source_file, discover_output, output_file, model)
 
     # Check output
     if os.path.exists(output_file):
-        print(f"\nRCA report written to: {output_file}")
+        log.info("Report written to %s", output_file, extra={"cat": "result"})
     else:
-        print(f"\nWarning: expected output file {output_file} was not created.", file=sys.stderr)
+        log.error("Expected output file %s was not created", output_file)
         sys.exit(1)
 
 
